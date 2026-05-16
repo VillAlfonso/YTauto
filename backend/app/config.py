@@ -8,7 +8,8 @@ class Settings(BaseSettings):
 
     # Content pipeline LLM config. ai_provider selects which backend in
     # app/ai/registry.py — swap by changing the env var, no code edits.
-    ai_provider: str = "gemini"
+    # Defaults to "stub" so a fresh checkout works end-to-end without keys.
+    ai_provider: str = "stub"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
 

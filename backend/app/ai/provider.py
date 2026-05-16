@@ -15,6 +15,9 @@ class GenerationRequest:
     json_mode: bool = False
     temperature: float = 0.9
     max_output_tokens: int = 4096
+    # Identifier the StubProvider uses to pick a canned response. Real
+    # providers ignore it. Pipeline stages set this to their stage name.
+    stage_id: str | None = None
 
 
 class AIProvider(ABC):

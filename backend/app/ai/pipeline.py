@@ -69,6 +69,7 @@ async def run_deep_dive(
             prompt=deep_diver.build_user_prompt(genre, count, seed_dict),
             system=deep_diver.SYSTEM,
             json_mode=True,
+            stage_id="deep_dive",
         )
     )
     data = _extract_json(raw)
@@ -84,6 +85,7 @@ async def run_route_mapper(provider: AIProvider, title: str, count: int = 4) -> 
             json_mode=True,
             temperature=0.9,
             max_output_tokens=1536,
+            stage_id="route_mapper",
         )
     )
     data = _extract_json(raw)
@@ -97,6 +99,7 @@ async def run_organize(provider: AIProvider, findings: list[Finding]) -> Organiz
             prompt=organizer.build_user_prompt([f.model_dump() for f in findings]),
             system=organizer.SYSTEM,
             json_mode=True,
+            stage_id="organize",
         )
     )
     data = _extract_json(raw)
@@ -111,6 +114,7 @@ async def run_script(provider: AIProvider, story: Story) -> Script:
             system=script_writer.SYSTEM,
             json_mode=True,
             max_output_tokens=2048,
+            stage_id="script",
         )
     )
     data = _extract_json(raw)
@@ -132,6 +136,7 @@ async def run_title_forge(provider: AIProvider, idea: str, count: int = 5) -> Ti
             json_mode=True,
             temperature=1.0,
             max_output_tokens=1024,
+            stage_id="title_forge",
         )
     )
     data = _extract_json(raw)
@@ -146,6 +151,7 @@ async def run_clusters(provider: AIProvider, script_text: str) -> ClusterRespons
             system=cluster_analyzer.SYSTEM,
             json_mode=True,
             max_output_tokens=3072,
+            stage_id="clusters",
         )
     )
     data = _extract_json(raw)
