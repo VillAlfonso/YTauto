@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #0a0a0b;
+  color: #f5f5f7;
+  min-height: 100%;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes reveal {
+  0% { transform: translateY(8px); opacity: 0; }
+  60% { transform: translateY(-2px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shake {
+  0% { transform: translateY(-0.5px); }
+  50% { transform: translateY(0.5px); }
+  100% { transform: translateY(-0.5px); }
+}
+
+@keyframes pull {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(6px); }
+  100% { transform: translateY(0); }
+}
