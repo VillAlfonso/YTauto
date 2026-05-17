@@ -23,6 +23,7 @@ dist/
 build/
 *.log
 npm-debug.log*
+*.tsbuildinfo
 
 # os / editor
 .DS_Store

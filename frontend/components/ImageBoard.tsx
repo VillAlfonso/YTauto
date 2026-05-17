@@ -7,9 +7,18 @@ type Props = {
   sections: Section[];
   briefs: ImageBrief[];
   images: GeneratedImage[];
+  approvedUrls?: Set<string>;
+  onToggleApprove?: (img: GeneratedImage) => void;
 };
 
-export function ImageBoard({ script, sections, briefs, images }: Props) {
+export function ImageBoard({
+  script,
+  sections,
+  briefs,
+  images,
+  approvedUrls,
+  onToggleApprove,
+}: Props) {
   const byId = (id: string) => ({
     brief: briefs.find((b) => b.section_id === id) ?? null,
     image: images.find((i) => i.section_id === id) ?? null,
@@ -34,9 +43,22 @@ export function ImageBoard({ script, sections, briefs, images }: Props) {
               </span>
               <span className="text-sm font-medium">{s.summary || s.id}</span>
               {image?.references_previous && (
-                <span className="ml-auto text-[10px] uppercase tracking-widest text-text-muted">
+                <span className="text-[10px] uppercase tracking-widest text-text-muted">
                   ↻ chained from §{i}
                 </span>
+              )}
+              {image && onToggleApprove && (
+                <button
+                  onClick={() => onToggleApprove(image)}
+                  className={[
+                    "ml-auto text-[10px] uppercase tracking-widest px-2 py-1 rounded border transition",
+                    approvedUrls?.has(image.image_url)
+                      ? "bg-accent/15 border-accent text-accent"
+                      : "border-line text-text-muted hover:text-text hover:border-text-muted",
+                  ].join(" ")}
+                >
+                  {approvedUrls?.has(image.image_url) ? "✓ approved" : "approve"}
+                </button>
               )}
             </div>
 
