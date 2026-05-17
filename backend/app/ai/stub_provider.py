@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import quote
 
 from .provider import AIProvider, GenerationRequest
 
@@ -329,6 +330,138 @@ def _clusters_for_prompt(prompt: str) -> dict:
     return {"clusters": clusters}
 
 
+def _sections_for_prompt(prompt: str) -> dict:
+    """Same script-parsing trick as clusters, but with 'summary' instead of
+    'suggested_image'."""
+    script_match = re.search(r'\"\"\"(.*?)\"\"\"', prompt, re.DOTALL)
+    if not script_match:
+        return {"sections": []}
+    script = script_match.group(1)
+
+    sentence_ends = [m.end() for m in re.finditer(r"[.!?](?:\s|\n|$)", script)]
+    if not sentence_ends or sentence_ends[-1] < len(script):
+        sentence_ends.append(len(script))
+
+    target = 8
+    step = max(1, len(sentence_ends) // target)
+    boundaries = [0]
+    for i in range(step, len(sentence_ends), step):
+        boundaries.append(sentence_ends[i])
+        if len(boundaries) - 1 >= target:
+            break
+    if boundaries[-1] < len(script):
+        boundaries.append(len(script))
+
+    sections = []
+    summaries = [
+        "opening setup", "first complication", "context drop", "the turn",
+        "rising stakes", "the twist", "consequence", "payoff", "punchline",
+        "coda",
+    ]
+    for i in range(len(boundaries) - 1):
+        start, end = boundaries[i], boundaries[i + 1]
+        if end <= start:
+            continue
+        sections.append(
+            {
+                "id": f"s{i+1}",
+                "start": start,
+                "end": end,
+                "summary": summaries[i % len(summaries)],
+            }
+        )
+    return {"sections": sections}
+
+
+def _image_brief_for_prompt(prompt: str) -> dict:
+    """The image_decider prompt embeds the section text and id. Pull them out
+    and synthesize a brief that references the actual text so the UI looks
+    real, not generic.
+    """
+    sid_match = re.search(r"id=(s\d+)", prompt)
+    section_id = sid_match.group(1) if sid_match else "s1"
+
+    section_match = re.search(r"SECTION TO BRIEF.*?\"\"\"(.*?)\"\"\"", prompt, re.DOTALL)
+    section_text = section_match.group(1).strip() if section_match else ""
+    snippet = section_text[:80].replace("\n", " ").strip()
+
+    moods = ["wry", "deadpan", "wistful", "tense", "absurd", "warm", "stark"]
+    subjects = [
+        "lone figure at a desk",
+        "two characters arguing",
+        "object hero shot",
+        "wide establishing scene",
+        "newspaper clipping",
+        "labelled diagram",
+        "split-panel cut",
+    ]
+    idx = int(re.sub(r"\D", "", section_id) or 1) - 1
+    mood = moods[idx % len(moods)]
+    subject = subjects[idx % len(subjects)]
+
+    return {
+        "section_id": section_id,
+        "image_brief": (
+            f"MS Paint-style line drawing: {subject}. The scene reads {mood}. "
+            f"It should track the line '{snippet}{'...' if len(section_text) > 80 else ''}'. "
+            "Stub brief — replace with real Gemini output by setting AI_PROVIDER=gemini."
+        ),
+        "subject": subject,
+        "mood": mood,
+    }
+
+
+def _image_prompt_for_prompt(prompt: str) -> dict:
+    """The image_generator prompt embeds the brief JSON and (optionally) the
+    previous image's prompt. We echo style markers from the previous prompt
+    so the stub demonstrates the consistency chain even without a real model.
+    """
+    brief_match = re.search(r"\"image_brief\"\s*:\s*\"([^\"]+)\"", prompt)
+    subject_match = re.search(r"\"subject\"\s*:\s*\"([^\"]+)\"", prompt)
+    mood_match = re.search(r"\"mood\"\s*:\s*\"([^\"]+)\"", prompt)
+    brief = brief_match.group(1) if brief_match else ""
+    subject = subject_match.group(1) if subject_match else "subject"
+    mood = mood_match.group(1) if mood_match else "neutral"
+
+    previous = re.search(
+        r"Previous section's image prompt.*?\"\"\"(.*?)\"\"\"", prompt, re.DOTALL
+    )
+    style_marker = "MS Paint-style line art, limited primary-color palette, slightly off-kilter linework"
+    if previous:
+        style_marker += " (preserved from previous section)"
+
+    image_prompt = (
+        f"{style_marker}. Subject: {subject}. Mood: {mood}. "
+        f"Brief: {brief[:200]}"
+    )
+    return {"image_prompt": image_prompt}
+
+
+def _svg_placeholder(text: str, color: str) -> str:
+    """Inline SVG data URL — renders instantly, no external network needed."""
+    safe = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">'
+        f'<rect width="600" height="400" fill="{color}"/>'
+        '<text x="24" y="40" fill="white" font-family="ui-sans-serif,system-ui,sans-serif" '
+        'font-size="13" font-weight="700" letter-spacing="2">STUB IMAGE</text>'
+        '<foreignObject x="24" y="60" width="552" height="320">'
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="color:white;'
+        'font-family:ui-sans-serif,system-ui,sans-serif;font-size:18px;'
+        'line-height:1.4;word-wrap:break-word;">'
+        f"{safe}"
+        "</div>"
+        "</foreignObject>"
+        "</svg>"
+    )
+    return f"data:image/svg+xml;utf8,{quote(svg)}"
+
+
 _DISPATCH: dict[str, object] = {
     "title_forge": _TITLES_STUB,
     "route_mapper": _ROUTES_STUB,
@@ -346,7 +479,16 @@ class StubProvider(AIProvider):
             return json.dumps(_script_for_prompt(req.prompt))
         if stage == "clusters":
             return json.dumps(_clusters_for_prompt(req.prompt))
+        if stage == "sectioner":
+            return json.dumps(_sections_for_prompt(req.prompt))
+        if stage == "image_decider":
+            return json.dumps(_image_brief_for_prompt(req.prompt))
+        if stage == "image_generator":
+            return json.dumps(_image_prompt_for_prompt(req.prompt))
         canned = _DISPATCH.get(stage)
         if canned is not None:
             return json.dumps(canned)
         return json.dumps({"_stub": True, "stage_id": stage})
+
+    async def generate_image(self, prompt: str, *, color_hint: str = "#4d96ff") -> str:
+        return _svg_placeholder(prompt[:280], color_hint)

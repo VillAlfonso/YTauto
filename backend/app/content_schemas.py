@@ -124,3 +124,54 @@ class RoutesResponse(BaseModel):
 class RoutesRequest(BaseModel):
     title: str
     count: int = 4
+
+
+# ---- Prototype flow: paste-script → section → brief → generate ----
+
+
+class Section(BaseModel):
+    id: str
+    start: int
+    end: int
+    color: str
+    summary: str = ""
+
+
+class SectionsResponse(BaseModel):
+    script: str
+    sections: list[Section]
+
+
+class ImageBrief(BaseModel):
+    section_id: str
+    image_brief: str
+    subject: str = ""
+    mood: str = ""
+
+
+class ImageBriefsResponse(BaseModel):
+    briefs: list[ImageBrief]
+
+
+class GeneratedImage(BaseModel):
+    section_id: str
+    image_url: str
+    image_prompt: str
+    references_previous: bool = False
+
+
+class GeneratedImagesResponse(BaseModel):
+    images: list[GeneratedImage]
+
+
+class SectionRequest(BaseModel):
+    script: str
+
+
+class ImageBriefsRequest(BaseModel):
+    script: str
+    sections: list[Section]
+
+
+class ImageGenerateRequest(BaseModel):
+    briefs: list[ImageBrief]

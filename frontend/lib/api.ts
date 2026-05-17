@@ -4,10 +4,15 @@ import type {
   DeepDiveResponse,
   DeepDiveSeed,
   Finding,
+  GeneratedImagesResponse,
   Genre,
+  ImageBrief,
+  ImageBriefsResponse,
   OrganizeResponse,
   RoutesResponse,
   Script,
+  Section,
+  SectionsResponse,
   Story,
   TitlesResponse,
   TrendsResponse,
@@ -75,4 +80,24 @@ export function runClusters(script: string): Promise<ClusterResponse> {
 
 export function runTitles(idea: string, count = 5): Promise<TitlesResponse> {
   return postJSON<TitlesResponse>("/api/content/titles", { idea, count });
+}
+
+// ---- Prototype flow ----
+
+export function runSection(script: string): Promise<SectionsResponse> {
+  return postJSON<SectionsResponse>("/api/content/section", { script });
+}
+
+export function runImageBriefs(
+  script: string,
+  sections: Section[],
+): Promise<ImageBriefsResponse> {
+  return postJSON<ImageBriefsResponse>("/api/content/image-briefs", {
+    script,
+    sections,
+  });
+}
+
+export function runGenerateImages(briefs: ImageBrief[]): Promise<GeneratedImagesResponse> {
+  return postJSON<GeneratedImagesResponse>("/api/content/generate-images", { briefs });
 }

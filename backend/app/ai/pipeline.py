@@ -16,10 +16,16 @@ from ..content_schemas import (
     DeepDiveResponse,
     DeepDiveSeed,
     Finding,
+    GeneratedImage,
+    GeneratedImagesResponse,
+    ImageBrief,
+    ImageBriefsResponse,
     OrganizeResponse,
     Route,
     RoutesResponse,
     Script,
+    Section,
+    SectionsResponse,
     Story,
     TitleCandidate,
     TitlesResponse,
@@ -27,12 +33,22 @@ from ..content_schemas import (
 from .prompts import (
     cluster_analyzer,
     deep_diver,
+    image_decider,
+    image_generator,
     organizer,
     route_mapper,
     script_writer,
+    sectioner,
     title_forge,
 )
 from .provider import AIProvider, AIProviderError, GenerationRequest
+
+# Same palette as the cluster analyzer — keeps the UI consistent across flows.
+SECTION_PALETTE = [
+    "#ff6b6b", "#ffd93d", "#6bcb77", "#4d96ff", "#c780fa",
+    "#ff9f43", "#1dd1a1", "#54a0ff", "#ee5253", "#feca57",
+    "#5f27cd", "#10ac84", "#ff6348", "#48dbfb", "#a55eea",
+]
 
 # Distinct, high-contrast colors that read well on a dark background.
 # Cycles if there are more clusters than colors.
@@ -158,6 +174,119 @@ async def run_clusters(provider: AIProvider, script_text: str) -> ClusterRespons
     raw_clusters = data.get("clusters", [])
     clusters = _normalize_clusters(raw_clusters, len(script_text))
     return ClusterResponse(script=script_text, clusters=clusters)
+
+
+async def run_sectioner(provider: AIProvider, script: str) -> SectionsResponse:
+    raw = await provider.generate(
+        GenerationRequest(
+            prompt=sectioner.build_user_prompt(script),
+            system=sectioner.SYSTEM,
+            json_mode=True,
+            max_output_tokens=3072,
+            stage_id="sectioner",
+        )
+    )
+    data = _extract_json(raw)
+    sections = _normalize_sections(data.get("sections", []), len(script))
+    return SectionsResponse(script=script, sections=sections)
+
+
+async def run_image_briefs(
+    provider: AIProvider, script: str, sections: list[Section]
+) -> ImageBriefsResponse:
+    """Brief sections in parallel — each LLM call sees the full script for
+    context plus the one section it's responsible for.
+    """
+    import asyncio
+
+    async def brief_one(s: Section) -> ImageBrief:
+        raw = await provider.generate(
+            GenerationRequest(
+                prompt=image_decider.build_user_prompt(script, s.model_dump()),
+                system=image_decider.SYSTEM,
+                json_mode=True,
+                max_output_tokens=512,
+                stage_id="image_decider",
+            )
+        )
+        data = _extract_json(raw)
+        return ImageBrief(
+            section_id=data.get("section_id", s.id),
+            image_brief=data.get("image_brief", ""),
+            subject=data.get("subject", ""),
+            mood=data.get("mood", ""),
+        )
+
+    briefs = await asyncio.gather(*(brief_one(s) for s in sections))
+    return ImageBriefsResponse(briefs=list(briefs))
+
+
+async def run_image_generations(
+    provider: AIProvider,
+    briefs: list[ImageBrief],
+    section_colors: dict[str, str] | None = None,
+) -> GeneratedImagesResponse:
+    """SEQUENTIAL — each call passes the previous section's image_prompt in,
+    so the model can keep style/palette/character design consistent across
+    the video. Order in `briefs` is the order of generation.
+    """
+    section_colors = section_colors or {}
+    out: list[GeneratedImage] = []
+    previous_prompt: str | None = None
+
+    for brief in briefs:
+        prompt_text = image_generator.build_user_prompt(brief.model_dump(), previous_prompt)
+        raw = await provider.generate(
+            GenerationRequest(
+                prompt=prompt_text,
+                system=image_generator.SYSTEM,
+                json_mode=True,
+                max_output_tokens=512,
+                stage_id="image_generator",
+            )
+        )
+        data = _extract_json(raw)
+        image_prompt = data.get("image_prompt", "")
+        try:
+            url = await provider.generate_image(
+                image_prompt,
+                color_hint=section_colors.get(brief.section_id, "#4d96ff"),
+            )
+        except NotImplementedError as e:
+            raise AIProviderError(str(e))
+        out.append(
+            GeneratedImage(
+                section_id=brief.section_id,
+                image_url=url,
+                image_prompt=image_prompt,
+                references_previous=previous_prompt is not None,
+            )
+        )
+        previous_prompt = image_prompt
+
+    return GeneratedImagesResponse(images=out)
+
+
+def _normalize_sections(raw: list[dict], script_len: int) -> list[Section]:
+    """Same shape as _normalize_clusters — clamp, drop overlaps, assign colors."""
+    out: list[Section] = []
+    cursor = 0
+    for i, s in enumerate(raw):
+        start = max(int(s.get("start", cursor)), cursor)
+        end = min(int(s.get("end", start)), script_len)
+        if end <= start:
+            continue
+        out.append(
+            Section(
+                id=s.get("id") or f"s{i+1}",
+                start=start,
+                end=end,
+                color=SECTION_PALETTE[i % len(SECTION_PALETTE)],
+                summary=s.get("summary", ""),
+            )
+        )
+        cursor = end
+    return out
 
 
 def _normalize_clusters(raw: list[dict], script_len: int) -> list[Cluster]:

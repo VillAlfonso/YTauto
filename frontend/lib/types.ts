@@ -114,3 +114,40 @@ export type DeepDiveSeed = {
   angle?: string;
   treatment?: string;
 };
+
+// ---- Prototype flow: paste-script -> section -> brief -> generate ----
+
+export type Section = {
+  id: string;
+  start: number;
+  end: number;
+  color: string;
+  summary: string;
+};
+
+export type SectionsResponse = {
+  script: string;
+  sections: Section[];
+};
+
+export type ImageBrief = {
+  section_id: string;
+  image_brief: string;
+  subject: string;
+  mood: string;
+};
+
+export type ImageBriefsResponse = {
+  briefs: ImageBrief[];
+};
+
+export type GeneratedImage = {
+  section_id: string;
+  image_url: string;
+  image_prompt: string;
+  references_previous: boolean;
+};
+
+export type GeneratedImagesResponse = {
+  images: GeneratedImage[];
+};
