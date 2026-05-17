@@ -5,6 +5,7 @@ import { ApprovedLibrary } from "@/components/ApprovedLibrary";
 import { AudioPanel } from "@/components/AudioPanel";
 import { ImageBoard } from "@/components/ImageBoard";
 import { PipelineStages, type Stage, type StageState } from "@/components/PipelineStages";
+import { PreviewMonitor } from "@/components/PreviewMonitor";
 import { SectionedScriptView } from "@/components/SectionedScriptView";
 import { Timeline } from "@/components/Timeline";
 import {
@@ -399,16 +400,26 @@ export default function StudioPage() {
           />
 
           {audioUrl && (
-            <Timeline
-              timeline={timeline}
-              setTimeline={setTimeline}
-              approved={approved}
-              audioFile={audioFile}
-              audioRef={audioRef}
-              audioDuration={audioDuration}
-              currentTime={currentTime}
-              isPlaying={isPlaying}
-            />
+            <>
+              <PreviewMonitor
+                timeline={timeline}
+                approved={approved}
+                currentTime={currentTime}
+                audioDuration={audioDuration}
+                isPlaying={isPlaying}
+                audioRef={audioRef}
+              />
+              <Timeline
+                timeline={timeline}
+                setTimeline={setTimeline}
+                approved={approved}
+                audioFile={audioFile}
+                audioRef={audioRef}
+                audioDuration={audioDuration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+              />
+            </>
           )}
 
           <div className="flex items-center gap-3 flex-wrap">
