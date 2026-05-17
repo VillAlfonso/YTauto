@@ -151,3 +151,13 @@ export type GeneratedImage = {
 export type GeneratedImagesResponse = {
   images: GeneratedImage[];
 };
+
+// Real-editor timeline clip. Decoupled from section_id so split halves and
+// manually-added clips work the same as auto-generated ones.
+export type TimelineClip = {
+  id: string;
+  image_url: string | null;
+  start_seconds: number;
+  duration_seconds: number;
+  section_id?: string;
+};

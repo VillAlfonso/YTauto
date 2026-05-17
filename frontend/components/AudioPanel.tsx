@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 type Props = {
   audioUrl: string | null;
   fileName: string | null;
   duration: number;
-  currentTime: number;
   onFile: (file: File) => void;
   onClear: () => void;
-  onTimeUpdate: (t: number) => void;
-  onDuration: (d: number) => void;
-  seekSignal?: number; // change this number to imperatively seek to a time
-  seekTo?: number;
 };
 
 function fmt(seconds: number): string {
@@ -22,48 +15,17 @@ function fmt(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function AudioPanel({
-  audioUrl,
-  fileName,
-  duration,
-  currentTime,
-  onFile,
-  onClear,
-  onTimeUpdate,
-  onDuration,
-  seekSignal,
-  seekTo,
-}: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Imperative seek when parent bumps seekSignal.
-  useEffect(() => {
-    if (audioRef.current && typeof seekTo === "number") {
-      audioRef.current.currentTime = seekTo;
-    }
-  }, [seekSignal, seekTo]);
-
-  return (
-    <div className="bg-bg-card border border-line rounded-xl p-4">
-      <div className="flex items-baseline justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-sm">Voice-over audio</h3>
-          <p className="text-[11px] text-text-muted mt-0.5">
-            Drives the timeline. Slots above auto-distribute across the audio length.
-          </p>
-        </div>
-        {audioUrl && (
-          <span className="text-[10px] uppercase tracking-widest text-text-muted">
-            {fmt(currentTime)} / {fmt(duration)}
-          </span>
-        )}
-      </div>
-
-      {!audioUrl ? (
-        <label className="flex flex-col items-center justify-center gap-2 py-8 px-4 border border-dashed border-line rounded-lg cursor-pointer hover:border-text-muted hover:bg-bg-elevated/30 transition">
-          <span className="text-sm">Click to upload audio</span>
+/** Audio file management only. The <audio> element and all playback controls
+ * live in the parent + Timeline. This component is just the upload prompt
+ * (when no audio) or a thin "filename · replace" info pill (when loaded). */
+export function AudioPanel({ audioUrl, fileName, duration, onFile, onClear }: Props) {
+  if (!audioUrl) {
+    return (
+      <label className="block bg-bg-card border border-line rounded-xl">
+        <div className="flex flex-col items-center justify-center gap-2 py-8 px-4 border border-dashed border-line rounded-xl cursor-pointer hover:border-text-muted hover:bg-bg-elevated/30 transition">
+          <span className="text-sm font-medium">Upload voice-over audio</span>
           <span className="text-[11px] text-text-muted">
-            .mp3, .wav, .m4a, .ogg — stays on your machine
+            .mp3, .wav, .m4a, .ogg — stays on your machine. Drives the timeline.
           </span>
           <input
             type="file"
@@ -75,28 +37,24 @@ export function AudioPanel({
               e.currentTarget.value = "";
             }}
           />
-        </label>
-      ) : (
-        <>
-          <div className="flex items-center justify-between text-xs text-text-muted mb-2">
-            <span className="truncate">{fileName ?? "audio"}</span>
-            <button
-              onClick={onClear}
-              className="text-[10px] uppercase tracking-widest text-text-muted hover:text-text"
-            >
-              replace
-            </button>
-          </div>
-          <audio
-            ref={audioRef}
-            src={audioUrl}
-            controls
-            className="w-full"
-            onLoadedMetadata={(e) => onDuration(e.currentTarget.duration)}
-            onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
-          />
-        </>
-      )}
+        </div>
+      </label>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 bg-bg-card border border-line rounded-xl px-3 py-2 text-xs">
+      <span className="text-[10px] uppercase tracking-widest text-text-muted shrink-0">
+        audio
+      </span>
+      <span className="truncate flex-1 font-medium">{fileName ?? "audio"}</span>
+      <span className="text-text-muted tabular-nums shrink-0">{fmt(duration)}</span>
+      <button
+        onClick={onClear}
+        className="text-[10px] uppercase tracking-widest px-2 py-1 rounded border border-line text-text-muted hover:text-text hover:border-text-muted shrink-0"
+      >
+        replace
+      </button>
     </div>
   );
 }

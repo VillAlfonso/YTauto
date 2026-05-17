@@ -12,7 +12,12 @@ import {
   runImageBriefs,
   runSection,
 } from "@/lib/api";
-import type { GeneratedImage, ImageBrief, Section } from "@/lib/types";
+import type {
+  GeneratedImage,
+  ImageBrief,
+  Section,
+  TimelineClip,
+} from "@/lib/types";
 
 const PLACEHOLDER_SCRIPT = `Paste your finished YouTube script here.
 
@@ -21,7 +26,7 @@ The pipeline will section it, decide an image brief per section, then generate (
 Want a quick test? Paste a few paragraphs of anything — the stubs will section by sentence boundaries and you'll see the full flow.`;
 
 const LS_APPROVED = "ytauto:prototype:approved";
-const LS_CLIPS = "ytauto:prototype:clips";
+const LS_TIMELINE = "ytauto:prototype:timeline";
 
 export default function StudioPage() {
   const [script, setScript] = useState("");
@@ -33,13 +38,13 @@ export default function StudioPage() {
 
   // Editor state
   const [approved, setApproved] = useState<Record<string, GeneratedImage>>({});
-  const [clips, setClips] = useState<Record<string, string>>({});
+  const [timeline, setTimeline] = useState<TimelineClip[]>([]);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [seekSignal, setSeekSignal] = useState(0);
-  const [seekTo, setSeekTo] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Hydrate persisted bits on mount. Audio file isn't persisted — re-upload each session.
   const hydratedRef = useRef(false);
@@ -47,8 +52,8 @@ export default function StudioPage() {
     try {
       const a = localStorage.getItem(LS_APPROVED);
       if (a) setApproved(JSON.parse(a));
-      const c = localStorage.getItem(LS_CLIPS);
-      if (c) setClips(JSON.parse(c));
+      const t = localStorage.getItem(LS_TIMELINE);
+      if (t) setTimeline(JSON.parse(t));
     } catch {}
     hydratedRef.current = true;
   }, []);
@@ -64,12 +69,30 @@ export default function StudioPage() {
   useEffect(() => {
     if (hydratedRef.current) {
       try {
-        localStorage.setItem(LS_CLIPS, JSON.stringify(clips));
+        localStorage.setItem(LS_TIMELINE, JSON.stringify(timeline));
       } catch {}
     }
-  }, [clips]);
+  }, [timeline]);
 
-  // Cleanup ObjectURL when audio changes / unmounts
+  // Auto-initialize timeline once we have sections + audio loaded and no clips yet.
+  // Preserves user's manual arrangement on subsequent runs.
+  useEffect(() => {
+    if (timeline.length === 0 && sections.length > 0 && audioDuration > 0) {
+      const slot = audioDuration / sections.length;
+      const seed = Date.now();
+      setTimeline(
+        sections.map((s, i) => ({
+          id: `c${i + 1}-${seed}`,
+          image_url: null,
+          start_seconds: +(i * slot).toFixed(3),
+          duration_seconds: +slot.toFixed(3),
+          section_id: s.id,
+        })),
+      );
+    }
+  }, [sections, audioDuration, timeline.length]);
+
+  // Revoke audio ObjectURL on unmount / change
   useEffect(() => {
     return () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -95,7 +118,7 @@ export default function StudioPage() {
     setSections([]);
     setBriefs([]);
     setImages([]);
-    setClips({}); // section_ids tie to a specific run — reset, keep approved library
+    setTimeline([]); // new section_ids — reset clips, library stays
     setStageState({ section: "running", brief: "idle", generate: "idle" });
     setStageDetail({});
     try {
@@ -160,26 +183,10 @@ export default function StudioPage() {
       delete next[image_url];
       return next;
     });
-    // Also clear any timeline slot that referenced it
-    setClips((prev) => {
-      const next: Record<string, string> = {};
-      for (const [sid, url] of Object.entries(prev)) {
-        if (url !== image_url) next[sid] = url;
-      }
-      return next;
-    });
-  }
-
-  function dropClip(section_id: string, image_url: string) {
-    setClips((prev) => ({ ...prev, [section_id]: image_url }));
-  }
-
-  function clearClip(section_id: string) {
-    setClips((prev) => {
-      const next = { ...prev };
-      delete next[section_id];
-      return next;
-    });
+    // Also clear any timeline clip referencing this image (keep the clip slot though)
+    setTimeline((prev) =>
+      prev.map((c) => (c.image_url === image_url ? { ...c, image_url: null } : c)),
+    );
   }
 
   function onAudioFile(f: File) {
@@ -188,39 +195,36 @@ export default function StudioPage() {
     setAudioUrl(URL.createObjectURL(f));
     setAudioDuration(0);
     setCurrentTime(0);
+    setIsPlaying(false);
   }
 
   function onAudioClear() {
+    if (audioRef.current) audioRef.current.pause();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioFile(null);
     setAudioUrl(null);
     setAudioDuration(0);
     setCurrentTime(0);
-  }
-
-  function seekTimeline(t: number) {
-    setSeekTo(t);
-    setSeekSignal((n) => n + 1);
+    setIsPlaying(false);
   }
 
   function exportSpec() {
-    if (sections.length === 0) return;
-    const slot = audioDuration > 0 ? audioDuration / sections.length : 0;
+    if (timeline.length === 0) return;
+    const sorted = [...timeline].sort((a, b) => a.start_seconds - b.start_seconds);
     const spec = {
-      schema: "ytauto-prototype-1",
+      schema: "ytauto-prototype-2",
       generated_at: new Date().toISOString(),
       script,
       audio_duration_seconds: audioDuration,
       audio_filename: audioFile?.name ?? null,
-      clips: sections.map((s, i) => ({
-        section_id: s.id,
-        summary: s.summary,
-        start_seconds: +(i * slot).toFixed(3),
-        end_seconds: +((i + 1) * slot).toFixed(3),
-        image_url: clips[s.id] ?? null,
-        image_prompt: clips[s.id]
-          ? approved[clips[s.id]]?.image_prompt ?? null
-          : null,
+      clips: sorted.map((c) => ({
+        id: c.id,
+        section_id: c.section_id ?? null,
+        start_seconds: +c.start_seconds.toFixed(3),
+        end_seconds: +(c.start_seconds + c.duration_seconds).toFixed(3),
+        duration_seconds: +c.duration_seconds.toFixed(3),
+        image_url: c.image_url,
+        image_prompt: c.image_url ? approved[c.image_url]?.image_prompt ?? null : null,
       })),
     };
     const blob = new Blob([JSON.stringify(spec, null, 2)], {
@@ -246,8 +250,8 @@ export default function StudioPage() {
   const wordCount = script.trim() ? script.trim().split(/\s+/).length : 0;
   const canBrief = sections.length > 0 && stageState.section !== "running";
   const canGenerate = briefs.length > 0 && stageState.brief !== "running";
-  const filledClips = Object.values(clips).filter(Boolean).length;
-  const canExport = sections.length > 0 && audioUrl !== null;
+  const filledClips = timeline.filter((c) => c.image_url).length;
+  const canExport = timeline.length > 0;
 
   return (
     <main className="min-h-screen px-4 sm:px-6 lg:px-10 py-6 max-w-7xl mx-auto">
@@ -260,12 +264,24 @@ export default function StudioPage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold mt-1">Studio</h1>
         <p className="text-text-muted text-sm mt-1 max-w-prose">
-          Paste a finished script. Three AIs in sequence: section it, brief each
-          section's image, then generate the images one at a time so style
-          stays consistent across the video. Approve the keepers and drop them
-          into the timeline above your voice-over.
+          Paste a script, run the AI pipeline, approve the keepers, drop them
+          onto the timeline. Split / trim / drag — like a real editor.
         </p>
       </header>
+
+      {/* Hidden <audio> element. Timeline drives it via audioRef. */}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
+          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+        />
+      )}
 
       <div className="space-y-6">
         {/* Script panel */}
@@ -357,66 +373,64 @@ export default function StudioPage() {
           </section>
         )}
 
-        {/* Editor — appears once there are sections to scaffold the timeline */}
-        {sections.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm uppercase tracking-widest text-text-muted">
-                Editor
-              </h2>
-              <span className="text-[11px] text-text-muted">
-                {filledClips}/{sections.length} clips filled
-                {audioUrl ? ` · audio ${Math.round(audioDuration)}s` : " · no audio"}
-              </span>
-            </div>
+        {/* Editor — audio upload first, then full timeline once loaded */}
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm uppercase tracking-widest text-text-muted">
+              Editor
+            </h2>
+            <span className="text-[11px] text-text-muted">
+              {timeline.length > 0
+                ? `${filledClips}/${timeline.length} clips have images`
+                : audioUrl
+                  ? "no clips yet"
+                  : "upload audio to start the timeline"}
+            </span>
+          </div>
 
-            <ApprovedLibrary approved={approved} onRemove={removeFromLibrary} />
+          <ApprovedLibrary approved={approved} onRemove={removeFromLibrary} />
 
+          <AudioPanel
+            audioUrl={audioUrl}
+            fileName={audioFile?.name ?? null}
+            duration={audioDuration}
+            onFile={onAudioFile}
+            onClear={onAudioClear}
+          />
+
+          {audioUrl && (
             <Timeline
-              sections={sections}
-              clips={clips}
+              timeline={timeline}
+              setTimeline={setTimeline}
               approved={approved}
+              audioFile={audioFile}
+              audioRef={audioRef}
               audioDuration={audioDuration}
               currentTime={currentTime}
-              onDrop={dropClip}
-              onClear={clearClip}
-              onSeek={seekTimeline}
+              isPlaying={isPlaying}
             />
+          )}
 
-            <AudioPanel
-              audioUrl={audioUrl}
-              fileName={audioFile?.name ?? null}
-              duration={audioDuration}
-              currentTime={currentTime}
-              onFile={onAudioFile}
-              onClear={onAudioClear}
-              onTimeUpdate={setCurrentTime}
-              onDuration={setAudioDuration}
-              seekSignal={seekSignal}
-              seekTo={seekTo}
-            />
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={exportSpec}
-                disabled={!canExport}
-                className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-30"
-                title={
-                  !canExport
-                    ? "Section a script and upload audio first"
-                    : "Download an edit-spec JSON that an external renderer can consume"
-                }
-              >
-                Export edit-spec (.json)
-              </button>
-              <p className="text-[11px] text-text-muted max-w-md">
-                Stub export — downloads a JSON describing the timeline (clips,
-                durations, image URLs). When the render pipeline is wired up,
-                this is what gets handed to it.
-              </p>
-            </div>
-          </section>
-        )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={exportSpec}
+              disabled={!canExport}
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-30"
+              title={
+                !canExport
+                  ? "Need at least one clip on the timeline"
+                  : "Download an edit-spec JSON for an external renderer"
+              }
+            >
+              Export edit-spec (.json)
+            </button>
+            <p className="text-[11px] text-text-muted max-w-md">
+              Stub export — downloads JSON describing every clip's image, start
+              and end times. When a real renderer is wired up, this is what
+              gets fed to it.
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );
