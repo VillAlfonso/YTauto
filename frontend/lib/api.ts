@@ -1,5 +1,6 @@
 import type {
   APIKey,
+  TestKeyResponse,
   ClusterResponse,
   DeepDiveResponse,
   DeepDiveSeed,
@@ -119,4 +120,8 @@ export function deactivateKey(id: string): Promise<APIKey> {
 
 export function resetKey(id: string): Promise<APIKey> {
   return postJSON<APIKey>(`/api/keys/${encodeURIComponent(id)}/reset`, {});
+}
+
+export function testKey(id: string): Promise<TestKeyResponse> {
+  return postJSON<TestKeyResponse>(`/api/keys/${encodeURIComponent(id)}/test`, {});
 }

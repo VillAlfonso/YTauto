@@ -57,6 +57,21 @@ async def _call_gemini_image(api_key: str, prompt: str) -> str:
     )
 
 
+async def test_one(api_key: str, prompt: str | None = None) -> str:
+    """Make a single image gen call with the given key. Raises QuotaError on
+    401/403/429, RuntimeError on anything else. Used by the /api/keys/{id}/test
+    endpoint to verify a key without burning through a full pipeline batch."""
+    return await _call_gemini_image(
+        api_key,
+        prompt
+        or (
+            "MS Paint cartoon, 16:9 aspect ratio, crude line drawing with flat "
+            "solid-color fills, primary palette. A single stick figure waving "
+            "with a small smile, simple white background, no text labels."
+        ),
+    )
+
+
 async def generate_image(prompt: str) -> str | None:
     """Generate one image. Returns a data: URL or None.
 

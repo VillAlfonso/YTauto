@@ -374,26 +374,26 @@ def _sections_for_prompt(prompt: str) -> dict:
 
 
 def _image_brief_for_prompt(prompt: str) -> dict:
-    """The image_decider prompt embeds the section text and id. Pull them out
-    and synthesize a brief that references the actual text so the UI looks
-    real, not generic.
-    """
+    """Brief is consumed by the image generator. Pull the actual section text
+    out of the image_decider prompt so the brief is content-aware (otherwise
+    the image generator builds a meaningless prompt and Gemini draws random
+    things)."""
     sid_match = re.search(r"id=(s\d+)", prompt)
     section_id = sid_match.group(1) if sid_match else "s1"
 
     section_match = re.search(r"SECTION TO BRIEF.*?\"\"\"(.*?)\"\"\"", prompt, re.DOTALL)
     section_text = section_match.group(1).strip() if section_match else ""
-    snippet = section_text[:80].replace("\n", " ").strip()
+    snippet = section_text[:140].replace("\n", " ").strip()
 
     moods = ["wry", "deadpan", "wistful", "tense", "absurd", "warm", "stark"]
     subjects = [
-        "lone figure at a desk",
-        "two characters arguing",
-        "object hero shot",
-        "wide establishing scene",
-        "newspaper clipping",
-        "labelled diagram",
-        "split-panel cut",
+        "a stick figure with raised arms",
+        "two stick figures mid-argument",
+        "a single hand-drawn object centered on screen",
+        "a wide shot of a small scene",
+        "a newspaper headline cutout",
+        "a labelled crude diagram",
+        "a split panel of before and after",
     ]
     idx = int(re.sub(r"\D", "", section_id) or 1) - 1
     mood = moods[idx % len(moods)]
@@ -402,9 +402,9 @@ def _image_brief_for_prompt(prompt: str) -> dict:
     return {
         "section_id": section_id,
         "image_brief": (
-            f"MS Paint-style line drawing: {subject}. The scene reads {mood}. "
-            f"It should track the line '{snippet}{'...' if len(section_text) > 80 else ''}'. "
-            "Stub brief — replace with real Gemini output by setting AI_PROVIDER=gemini."
+            f"Draw {subject} illustrating the spoken line: \"{snippet}"
+            f"{'...' if len(section_text) > 140 else ''}\". "
+            f"The scene should feel {mood}. Keep it simple, readable at thumbnail size."
         ),
         "subject": subject,
         "mood": mood,
@@ -412,29 +412,40 @@ def _image_brief_for_prompt(prompt: str) -> dict:
 
 
 def _image_prompt_for_prompt(prompt: str) -> dict:
-    """The image_generator prompt embeds the brief JSON and (optionally) the
-    previous image's prompt. We echo style markers from the previous prompt
-    so the stub demonstrates the consistency chain even without a real model.
-    """
+    """Builds the prompt that is actually sent to the Gemini image API.
+    This is the final string the model sees, so it must be concrete and
+    visual — no abstract descriptors, no hedging."""
     brief_match = re.search(r"\"image_brief\"\s*:\s*\"([^\"]+)\"", prompt)
     subject_match = re.search(r"\"subject\"\s*:\s*\"([^\"]+)\"", prompt)
     mood_match = re.search(r"\"mood\"\s*:\s*\"([^\"]+)\"", prompt)
     brief = brief_match.group(1) if brief_match else ""
-    subject = subject_match.group(1) if subject_match else "subject"
+    subject = subject_match.group(1) if subject_match else "a stick figure"
     mood = mood_match.group(1) if mood_match else "neutral"
 
-    previous = re.search(
-        r"Previous section's image prompt.*?\"\"\"(.*?)\"\"\"", prompt, re.DOTALL
-    )
-    style_marker = "MS Paint-style line art, limited primary-color palette, slightly off-kilter linework"
-    if previous:
-        style_marker += " (preserved from previous section)"
+    # Pull the spoken line out of the brief so the image generator can
+    # "see" what the section is actually about.
+    line_match = re.search(r'spoken line:\s*"([^"]+?)"', brief)
+    line_snippet = line_match.group(1) if line_match else ""
 
-    image_prompt = (
-        f"{style_marker}. Subject: {subject}. Mood: {mood}. "
-        f"Brief: {brief[:200]}"
+    has_previous = "Previous section's image prompt" in prompt
+
+    style_anchor = (
+        "MS Paint cartoon, 16:9 aspect ratio. Crude line drawings with flat "
+        "solid-color fills, slightly imperfect hand-drawn linework, limited "
+        "primary-color palette (red, blue, yellow, green, black, white). "
+        "Simple white background, no text labels, focal subject in the center."
     )
-    return {"image_prompt": image_prompt}
+
+    parts = [style_anchor, f"Scene: {subject}, {mood} mood."]
+    if line_snippet:
+        parts.append(f'Illustrates the narrated line: "{line_snippet}".')
+    parts.append(
+        "Match the exact visual style of the previous panel."
+        if has_previous
+        else "Establish the visual style for the series."
+    )
+
+    return {"image_prompt": " ".join(parts)}
 
 
 def _svg_placeholder(text: str, color: str) -> str:

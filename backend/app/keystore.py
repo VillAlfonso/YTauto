@@ -173,6 +173,16 @@ class KeyStore:
                     return k.key
             return None
 
+    def get_raw_key(self, key_id: str) -> Optional[str]:
+        """Lookup the raw key value by id. For internal use by callers that
+        need to make an API call (e.g. the /test endpoint). Never return
+        this to the frontend — use list_public() instead."""
+        with self._lock:
+            for k in self._keys:
+                if k.id == key_id:
+                    return k.key
+            return None
+
     def log_error(self, key_value: str, error: str) -> None:
         """Record a non-quota error against a key so the UI can show it,
         without marking the key exhausted."""

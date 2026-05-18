@@ -8,8 +8,9 @@ import {
   deleteKey,
   fetchKeys,
   resetKey,
+  testKey,
 } from "@/lib/api";
-import type { APIKey } from "@/lib/types";
+import type { APIKey, TestKeyResponse } from "@/lib/types";
 
 export default function KeysPage() {
   const [keys, setKeys] = useState<APIKey[]>([]);
@@ -18,6 +19,7 @@ export default function KeysPage() {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, TestKeyResponse>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -70,6 +72,20 @@ export default function KeysPage() {
   async function onDelete(id: string, label: string) {
     if (!confirm(`Delete "${label}"? This can't be undone.`)) return;
     await action(id, deleteKey);
+  }
+
+  async function onTest(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      const r = await testKey(id);
+      setTestResults((prev) => ({ ...prev, [id]: r }));
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   const hasActive = keys.some((k) => k.active && !k.exhausted);
@@ -216,6 +232,14 @@ export default function KeysPage() {
                       Activate
                     </button>
                   )}
+                  <button
+                    onClick={() => onTest(k.id)}
+                    disabled={isBusy}
+                    className="text-[11px] px-2 py-1 rounded border border-line text-text-muted hover:text-text hover:border-text-muted disabled:opacity-50"
+                    title="Generate one image with this key to verify it works"
+                  >
+                    {isBusy ? "Testing…" : "Test"}
+                  </button>
                   {k.exhausted && (
                     <button
                       onClick={() => action(k.id, resetKey)}
@@ -234,6 +258,32 @@ export default function KeysPage() {
                     Delete
                   </button>
                 </div>
+                {testResults[k.id] && (
+                  <div className="mt-3 pt-3 border-t border-line">
+                    {testResults[k.id].ok ? (
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest text-accent mb-2">
+                          ✓ key works
+                        </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={testResults[k.id].image_url ?? ""}
+                          alt="test result"
+                          className="w-40 aspect-video rounded border border-line object-cover bg-bg-elevated"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-xs">
+                        <span className="text-[10px] uppercase tracking-widest text-accent mr-2">
+                          ✗ {testResults[k.id].error}
+                        </span>
+                        <span className="text-text-muted break-all">
+                          {testResults[k.id].detail}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}

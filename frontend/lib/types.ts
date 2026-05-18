@@ -140,3 +140,10 @@ export type APIKey = {
   last_used_at: string | null;
   created_at: string;
 };
+
+export type TestKeyResponse = {
+  ok: boolean;
+  image_url: string | null;
+  error: "quota" | "invalid" | "other" | null;
+  detail: string | null;
+};
