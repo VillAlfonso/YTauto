@@ -30,6 +30,7 @@ from ..content_schemas import (
     TitleCandidate,
     TitlesResponse,
 )
+from . import image_backend
 from .prompts import (
     cluster_analyzer,
     deep_diver,
@@ -247,13 +248,18 @@ async def run_image_generations(
         )
         data = _extract_json(raw)
         image_prompt = data.get("image_prompt", "")
-        try:
-            url = await provider.generate_image(
-                image_prompt,
-                color_hint=section_colors.get(brief.section_id, "#4d96ff"),
-            )
-        except NotImplementedError as e:
-            raise AIProviderError(str(e))
+        # Try real Gemini image gen with key rotation. Falls back to the
+        # provider's stub (e.g. inline SVG) if no keys are available or all
+        # are exhausted.
+        url = await image_backend.generate_image(image_prompt)
+        if url is None:
+            try:
+                url = await provider.generate_image(
+                    image_prompt,
+                    color_hint=section_colors.get(brief.section_id, "#4d96ff"),
+                )
+            except NotImplementedError as e:
+                raise AIProviderError(str(e))
         out.append(
             GeneratedImage(
                 section_id=brief.section_id,

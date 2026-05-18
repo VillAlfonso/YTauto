@@ -4,6 +4,8 @@
 .env.*.local
 **/.env
 !**/.env.example
+# user API keys live here at runtime
+backend/keys.json
 
 # python
 __pycache__/
