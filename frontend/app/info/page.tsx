@@ -78,26 +78,18 @@ export default function InfoPage() {
           trick.
         </p>
         <p className="text-text-muted">
-          Two tabs, two jobs:{" "}
-          <Link href="/" className="text-accent hover:underline">
-            Analytics
-          </Link>{" "}
-          tells you what to make.{" "}
+          The work happens in the{" "}
           <Link href="/studio" className="text-accent hover:underline">
             Studio
+          </Link>
+          : paste a script, run a three-AI pipeline (sectioner → image
+          decider → image generator), approve the keepers, drop them onto a
+          real video-editor-style timeline synced to your voice-over. The{" "}
+          <Link href="/keys" className="text-accent hover:underline">
+            Keys
           </Link>{" "}
-          actually makes it — title forge, route mapper, and the AI pipeline
-          all live there as stacked sections.
-        </p>
-      </Section>
-
-      <Section title="Analytics — what's worth making right now">
-        <p>
-          Picks a category, finds the top 8–12 minute videos people are watching
-          in it this week, and ranks them by a simple proxy score: views,
-          engagement, how fast they're picking up steam. You're not copying
-          these videos — you're using them as a sonar ping for what the audience
-          is in the mood for.
+          page manages your Gemini API keys for image generation, with
+          auto-rotation when one hits a quota error.
         </p>
       </Section>
 

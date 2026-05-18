@@ -2,16 +2,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    youtube_api_key: str = ""
-    cache_ttl_seconds: int = 1800
     allowed_origin: str = "http://localhost:3000"
 
     # Content pipeline LLM config. ai_provider selects which backend in
     # app/ai/registry.py — swap by changing the env var, no code edits.
     # Defaults to "stub" so a fresh checkout works end-to-end without keys.
+    # Real Gemini keys for image generation are managed via the /keys page,
+    # not env vars.
     ai_provider: str = "stub"
-    gemini_api_key: str = ""
+    gemini_api_key: str = ""  # env fallback for text-stage Gemini calls
     gemini_model: str = "gemini-2.0-flash"
+    gemini_image_model: str = "gemini-2.5-flash-image"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
@@ -19,9 +20,9 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-# Content-generation genres. Distinct from the YouTube trend CATEGORIES above:
-# trends needs YouTube query strings; the content pipeline only needs a label
-# the deep diver can interpret.
+# Content-generation genres. Used by the /api/content/genres endpoint as a
+# starter set for the older genre-seeded pipeline (the current prototype
+# Studio uses paste-script flow instead, but the genre endpoints remain).
 GENRES: dict[str, str] = {
     "philosophy": "Philosophy",
     "finance": "Finance",
@@ -32,30 +33,3 @@ GENRES: dict[str, str] = {
     "science": "Science",
     "true_crime": "True Crime",
 }
-
-
-CATEGORIES: dict[str, dict] = {
-    "anime": {
-        "label": "Anime",
-        "queries": ["anime review", "anime explained", "anime breakdown"],
-        "yt_category_id": "1",
-    },
-    "finance": {
-        "label": "Finance",
-        "queries": ["stock market today", "crypto news", "personal finance explained"],
-        "yt_category_id": "25",
-    },
-    "gaming": {
-        "label": "Gaming",
-        "queries": ["gaming review", "game lore explained", "speedrun analysis"],
-        "yt_category_id": "20",
-    },
-    "tech": {
-        "label": "Tech",
-        "queries": ["tech review", "ai news explained", "software explained"],
-        "yt_category_id": "28",
-    },
-}
-
-DURATION_MIN_SECONDS = 8 * 60
-DURATION_MAX_SECONDS = 12 * 60

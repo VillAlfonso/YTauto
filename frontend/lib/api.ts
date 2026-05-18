@@ -1,11 +1,10 @@
 import type {
-  Category,
+  APIKey,
   ClusterResponse,
   DeepDiveResponse,
   DeepDiveSeed,
   Finding,
   GeneratedImagesResponse,
-  Genre,
   ImageBrief,
   ImageBriefsResponse,
   OrganizeResponse,
@@ -15,24 +14,9 @@ import type {
   SectionsResponse,
   Story,
   TitlesResponse,
-  TrendsResponse,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
-
-export async function fetchCategories(): Promise<Category[]> {
-  const r = await fetch(`${BASE}/api/categories`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`categories: ${r.status}`);
-  return r.json();
-}
-
-export async function fetchTrends(category: string): Promise<TrendsResponse> {
-  const r = await fetch(`${BASE}/api/trends?category=${encodeURIComponent(category)}`, {
-    cache: "no-store",
-  });
-  if (!r.ok) throw new Error(`trends: ${r.status}`);
-  return r.json();
-}
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(`${BASE}${path}`, {
@@ -48,11 +32,16 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return r.json();
 }
 
-export async function fetchGenres(): Promise<Genre[]> {
-  const r = await fetch(`${BASE}/api/content/genres`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`genres: ${r.status}`);
+async function getJSON<T>(path: string): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, { cache: "no-store" });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`${path}: ${r.status} ${t.slice(0, 200)}`);
+  }
   return r.json();
 }
+
+// ---- Content pipeline ----
 
 export function runDeepDive(
   genre: string,
@@ -100,4 +89,34 @@ export function runImageBriefs(
 
 export function runGenerateImages(briefs: ImageBrief[]): Promise<GeneratedImagesResponse> {
   return postJSON<GeneratedImagesResponse>("/api/content/generate-images", { briefs });
+}
+
+// ---- API keys ----
+
+export function fetchKeys(): Promise<APIKey[]> {
+  return getJSON<APIKey[]>("/api/keys");
+}
+
+export function addKey(label: string, key: string): Promise<APIKey> {
+  return postJSON<APIKey>("/api/keys", { label, key });
+}
+
+export async function deleteKey(id: string): Promise<void> {
+  const r = await fetch(`${BASE}/api/keys/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`delete key: ${r.status}`);
+}
+
+export function activateKey(id: string): Promise<APIKey> {
+  return postJSON<APIKey>(`/api/keys/${encodeURIComponent(id)}/activate`, {});
+}
+
+export function deactivateKey(id: string): Promise<APIKey> {
+  return postJSON<APIKey>(`/api/keys/${encodeURIComponent(id)}/deactivate`, {});
+}
+
+export function resetKey(id: string): Promise<APIKey> {
+  return postJSON<APIKey>(`/api/keys/${encodeURIComponent(id)}/reset`, {});
 }

@@ -1,35 +1,3 @@
-export type VideoRef = {
-  video_id: string;
-  title: string;
-  channel: string;
-  thumbnail: string;
-  published_at: string;
-  duration_seconds: number;
-  views: number;
-  likes: number;
-  comments: number;
-  view_velocity: number;
-  engagement_rate: number;
-  proxy_score: number;
-  url: string;
-};
-
-export type TrendTopic = {
-  query: string;
-  label: string;
-  rising_trend_score: number | null;
-  top_videos: VideoRef[];
-  topic_proxy_score: number;
-};
-
-export type TrendsResponse = {
-  category: string;
-  generated_at: string;
-  topics: TrendTopic[];
-};
-
-export type Category = { key: string; label: string };
-
 // ---- Content pipeline ----
 
 export type Genre = { key: string; label: string };
@@ -152,12 +120,23 @@ export type GeneratedImagesResponse = {
   images: GeneratedImage[];
 };
 
-// Real-editor timeline clip. Decoupled from section_id so split halves and
-// manually-added clips work the same as auto-generated ones.
 export type TimelineClip = {
   id: string;
   image_url: string | null;
   start_seconds: number;
   duration_seconds: number;
   section_id?: string;
+};
+
+// ---- API keys ----
+
+export type APIKey = {
+  id: string;
+  label: string;
+  key_preview: string;
+  active: boolean;
+  exhausted: boolean;
+  last_error: string | null;
+  last_used_at: string | null;
+  created_at: string;
 };
